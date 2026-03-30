@@ -1,23 +1,17 @@
-from loguru import logger
-
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from einops.einops import rearrange
-# from src.utils.profiler import PassThroughProfiler
 
 
 def mask_border(m, b: int, v):
-    """ Mask borders with value
-    Args:
-        m (torch.Tensor): [N, n_pointcloud, H1, W1]
-        b (int)
-        v (m.dtype)
-    """
+    """Zero out a margin of width b on the coarse feature map."""
+    if b <= 0:
+        return
     m[:, :, :b] = v
     m[:, :, :, :b] = v
-    m[:, :, -b:0] = v
-    m[:, :, :, -b:0] = v
+    m[:, :, -b:] = v
+    m[:, :, :, -b:] = v
 
 
 def mask_border_with_padding(m, bd, v, p_m0, p_m1):
@@ -131,7 +125,7 @@ class AdaptiveImageFeatureAggregation(nn.Module):
         return rearrange(feat_query_map, "n c h w -> n (h w) c")
 
 class CoarseMatching(nn.Module):
-    def __init__(self, config, profiler=None):
+    def __init__(self, config):
         super().__init__()
         self.config = config
         self.feat_normalizer = build_feat_normalizer(config["feat_norm_method"])
@@ -144,13 +138,10 @@ class CoarseMatching(nn.Module):
         else:
             raise NotImplementedError()
 
-        # from conf_matrix to prediction
         self.thr = config["thr"]
         self.border_rm = config["border_rm"]
         self.train_coarse_percent = config["train"]["train_coarse_percent"]
         self.train_pad_num_gt_min = config["train"]["train_pad_num_gt_min"]
-
-        self.profiler = profiler
 
     def forward(self, feat_db_3d, feat_query, data, mask_query=None):
         """
@@ -170,12 +161,8 @@ class CoarseMatching(nn.Module):
                 'mconf' (torch.Tensor): [M]}
             NOTE: M' != M during training.
         """
-        N, L, S, C = (
-            feat_db_3d.size(0),
-            feat_db_3d.size(1),
-            feat_query.size(1),
-            feat_query.size(2),
-        )
+        N, L = feat_db_3d.size(0), feat_db_3d.size(1)
+        S = feat_query.size(1)
 
         # normalize
         feat_db_3d, feat_query = map(self.feat_normalizer, [feat_db_3d, feat_query])
@@ -197,14 +184,11 @@ class CoarseMatching(nn.Module):
                 torch.einsum("nlc,nsc->nls", feat_db_3d, feat_query) / (self.temperature + 1e-4)
             )
             conf_matrix = F.softmax(sim_matrix, 2)
-            # conf_matrix = torch.sigmoid(sim_matrix)
         else:
             raise NotImplementedError
 
         data.update({"conf_matrix": conf_matrix})
 
-        # predict coarse matches from conf_matrix
-        # with self.profiler.record_function("LoFTR/coarse-matching/get_coarse_match"):
         if self.type == "sigmoid":
             conf_matrix_softmax = conf_matrix*F.softmax(sim_matrix, 1)
             data.update(**self.get_coarse_match(conf_matrix_softmax, data))
@@ -252,34 +236,23 @@ class CoarseMatching(nn.Module):
                 * (conf_matrix == conf_matrix.max(dim=1, keepdim=True)[0])
             )
         elif self.type == "sigmoid":
-            
-            mask = (
-                mask
-                * (conf_matrix == conf_matrix.max(dim=2, keepdim=True)[0])
-            )
+            mask = mask * (conf_matrix == conf_matrix.max(dim=2, keepdim=True)[0])
         else:
             raise NotImplementedError
 
-        # 3. find all valid coarse matches
-        # this only works when at most one `True` in each row
-        # mast_conf = conf_matrix[mask]
+        # At most one True per (b, i) row after mutual check; take argmax over query tokens.
         mask_v, all_j_ids = mask.max(dim=2)
-        # with self.profiler.record_function(
-        #     "LoFTR/coarse-matching/get_coarse_match/argmax-conf"
-        # ):
         b_ids, i_ids = torch.where(mask_v)
         j_ids = all_j_ids[b_ids, i_ids]
         mconf = conf_matrix[b_ids, i_ids, j_ids]
 
-        # when TRAINING
-        # select only part of coarse matches for fine-level training
-        # pad with gt coarses matches
+        # Training: subsample predicted matches and pad with GT for fine-level supervision
         if self.training and self.config['train']['train_padding']:
             if "mask0" not in data:
                 num_candidates_max = mask.size(0) * min(mask.size(1), mask.size(2))
             else:
-                raise not NotImplementedError
-            max_num_matches_train = int(num_candidates_max * self.train_coarse_percent) # Max train number
+                raise NotImplementedError("mask0 padding path is not implemented")
+            max_num_matches_train = int(num_candidates_max * self.train_coarse_percent)
             num_matches_pred = len(b_ids)
             assert (
                 self.train_pad_num_gt_min < max_num_matches_train
@@ -302,9 +275,7 @@ class CoarseMatching(nn.Module):
                 (max(max_num_matches_train - num_matches_pred, self.train_pad_num_gt_min),),
                 device=device,
             )
-            mconf_gt = torch.zeros(
-                len(spv_b_ids), device=device
-            )  # set conf of gt paddings to all zero
+            mconf_gt = torch.zeros(len(spv_b_ids), device=device)
 
             b_ids, i_ids, j_ids, mconf = map(
                 lambda x, y: torch.cat([x[pred_indices], y[gt_pad_indices]], dim=0),
@@ -316,10 +287,9 @@ class CoarseMatching(nn.Module):
                 ),
             )
 
-        # These matches select patches that feed into fine-level network
         coarse_matches = {"b_ids": b_ids, "i_ids": i_ids, "j_ids": j_ids}
 
-        # 4. Update with matches in original image resolution
+        # Map coarse grid indices to full-resolution query image coordinates
         scale = data["q_hw_i"][0] / data["q_hw_c"][0]
         scale_total = scale * data["query_image_scale"][b_ids][:, [1, 0]] if "query_image_scale" in data else scale
         mkpts_query = (
@@ -328,11 +298,11 @@ class CoarseMatching(nn.Module):
         )
         mkpts_3d_db = data["keypoints3d"][b_ids, i_ids]
 
-        # These matches is the current prediction (for visualization)
+        # Subset with non-zero confidence (excludes GT padding) for visualization
         coarse_matches.update(
             {
                 "gt_mask": mconf == 0,
-                "m_bids": b_ids[mconf != 0],  # mconf == 0 => gt matches
+                "m_bids": b_ids[mconf != 0],
                 "mkpts_3d_db": mkpts_3d_db[mconf != 0],
                 "mkpts_query_c": mkpts_query[mconf != 0],
                 "mconf": mconf[mconf != 0],
@@ -340,12 +310,3 @@ class CoarseMatching(nn.Module):
         )
 
         return coarse_matches
-
-    @property
-    def n_rand_samples(self):
-        return self._n_rand_samples
-
-    @n_rand_samples.setter
-    def n_rand_samples(self, value):
-        logger.warning(f"Setting {type(self).__name__}.n_rand_samples to {value}.")
-        self._n_rand_samples = value

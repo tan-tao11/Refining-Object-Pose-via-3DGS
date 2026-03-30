@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger
-from einops.einops import rearrange, repeat
+from einops.einops import rearrange
 from src.utils.load_model import load_backbone
 from src.utils.position_encoding import KeypointEncoding_linear, PositionEncodingSine
 from src.utils.normalize import normalize_3d_keypoints
@@ -16,11 +16,10 @@ from .backbone import (
 
 
 class Matching_Model(nn.Module):
-    def __init__(self, cfg, profiler=None):
+    def __init__(self, cfg):
         super(Matching_Model, self).__init__()
 
         self.cfg = cfg
-        self.profiler = profiler
 
         # Backbone network for extracting query image features
         self.backbone = load_backbone(self.cfg.backbone)
@@ -49,7 +48,7 @@ class Matching_Model(nn.Module):
                 norm_method=self.cfg.keypoints_encoding.norm_method,
             )
         else:
-            self._kpt_3d_pos_enc = None
+            self.kpt_3d_pos_enc = None
 
         # Self- and Cross-attention between query image and reference 3d keypoints
         self.loftr_coarse = LocalFeatureTransformer(self.cfg.loftr_coarse,)
@@ -57,10 +56,7 @@ class Matching_Model(nn.Module):
             self.cfg.loftr_coarse.d_model
         )
 
-        self.coarse_matching = CoarseMatching(
-            self.cfg.coarse_matching,
-            profiler=self.cfg.profiler
-        )
+        self.coarse_matching = CoarseMatching(self.cfg.coarse_matching)
 
         self.fine_preprocess = FinePreprocess(
             self.cfg.loftr_fine,
@@ -144,19 +140,15 @@ class Matching_Model(nn.Module):
         # Normalize 3D keypoints
         kpts3d = normalize_3d_keypoints(data['keypoints3d']) #(B, N, 3)
 
-        # Encode 3D keypoints with descriptors
-        desc3d_db = (
-            self.kpt_3d_pos_enc(
-                kpts3d,
-                data['descriptors3d_db']
-                if 'descriptors3d_coarse_db' not in data
-                else data['descriptors3d_coarse_db'],
-            )
-            if self.kpt_3d_pos_enc is not None
-            else data['descriptors3d_db']
+        coarse_desc = (
+            data["descriptors3d_db"]
             if "descriptors3d_coarse_db" not in data
             else data["descriptors3d_coarse_db"]
-        )  #(B, c, N)
+        )
+        if self.kpt_3d_pos_enc is not None:
+            desc3d_db = self.kpt_3d_pos_enc(kpts3d, coarse_desc)
+        else:
+            desc3d_db = coarse_desc
 
         # Flatten query image mask if it exists
         query_mask = None

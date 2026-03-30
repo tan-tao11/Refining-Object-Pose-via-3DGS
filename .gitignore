@@ -1,5 +1,4 @@
 dataset/
-dataset1/
 output/
 exp/
 weights/
@@ -7,6 +6,7 @@ weight/
 logs/
 vis/
 vis_val/
+ckpts/
 __pycache__/
 **/__pycache__/
 *.pyc

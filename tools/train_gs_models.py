@@ -35,9 +35,9 @@ if __name__ == "__main__":
 
     cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES", "")
     if cuda_visible:
-        gpu_indexs = [int(x) for x in cuda_visible.split(",")]
+        gpu_indices = [int(x) for x in cuda_visible.split(",")]
     else:
-        gpu_indexs = list(range(args.gpus))
+        gpu_indices = list(range(args.gpus))
     
     # Initialize command queue
     queue = Queue()
@@ -61,21 +61,18 @@ if __name__ == "__main__":
         if not queue.empty():
             command = queue.get()
             gpu_id = thread_id%args.gpus
-            process = start_command(command, gpu_indexs[gpu_id])
+            process = start_command(command, gpu_indices[gpu_id])
             processes.append((process, gpu_id))
-            # gpu_assignments[gpu_id] += 1
             time.sleep(120)
             
     while not queue.empty() or any(p[0].poll() is None for p in processes):
         for i, (process, gpu_id) in enumerate(processes):
-            if process.poll() is not None:  # 进程已完成
-                progress.update(1)  # 更新进度条
-                # gpu_assignments[gpu_id] -= 1
-                if not queue.empty():  # 启动新命令
+            if process.poll() is not None:
+                progress.update(1)
+                if not queue.empty():
                     command = queue.get()
-                    new_process = start_command(command, gpu_indexs[gpu_id])
+                    new_process = start_command(command, gpu_indices[gpu_id])
                     processes[i] = (new_process, gpu_id)
-                    # gpu_assignments[gpu_id] += 1
                     time.sleep(120)
     
         time.sleep(30)
@@ -83,6 +80,6 @@ if __name__ == "__main__":
     # Wait for finishing all processes
     for process, _ in processes:
         process.wait()
-        progress.update(1)  # 更新进度条
-    
-    progress.close()  # 关闭进度条
+        progress.update(1)
+
+    progress.close()

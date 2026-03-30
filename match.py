@@ -1,13 +1,13 @@
-import os 
+import os
+import os.path as osp
 import signal
 import sys
-import torch
 import time
 import datetime
+import torch
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.nn as nn
-import os.path as osp
 import numpy as np
 import matplotlib.pyplot as plt 
 from loguru import logger
@@ -51,7 +51,7 @@ def validation(model, config, writer, step=0, gpu_id=0):
     )
 
     num_val_batches = len(data_loader)
-    val_plot_invervel = max(num_val_batches // 5, 1)
+    val_plot_interval = max(num_val_batches // 5, 1)
     figures = []
     metrics_dict = {}
     for batch_idx, data in tqdm(enumerate(data_loader), ncols=100):
@@ -69,7 +69,7 @@ def validation(model, config, writer, step=0, gpu_id=0):
 
         # Visualization
         figure = {"evaluation": []}
-        if batch_idx % val_plot_invervel == 0:
+        if batch_idx % val_plot_interval == 0:
             figure = draw_reprojection_pair(data, visual_color_type="conf")
             figures.append(fig2numpy(figure['evaluation'][0]))
         
@@ -98,7 +98,7 @@ def validation(model, config, writer, step=0, gpu_id=0):
     
 
 def train_match_worker(gpu_id: int, config: OmegaConf):
-    """"Train matching model on the specified GPU."""
+    """Train the matching model on the given GPU (distributed worker)."""
     # Configure environment and threads
     num_threads = 4
     os.environ.update({
@@ -173,7 +173,7 @@ def train_match_worker(gpu_id: int, config: OmegaConf):
     if gpu_id == 0:
         progress_bar = tqdm(total=total_steps, ncols=100)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        exp_name = f"train_match_0416_{timestamp}"  # 示例：exp1_cnn_lr0.01_20231015_142022
+        exp_name = f"train_match_0416_{timestamp}"
         writer = SummaryWriter(log_dir=osp.join(config.train.save_dir, exp_name))
         validation(model.module, config, writer, gpu_id=0)
         model.train()
@@ -232,18 +232,14 @@ def fig2numpy(fig):
     buf.seek(0)
     image = Image.open(buf)
 
-    # 将PIL图像转换为NumPy数组
     image_array = np.array(image)
 
     return image_array
 
 def vis_figures(task, writer, figures, step=0):
     for name, fig in figures.items():
-        # 将Matplotlib图像转换为PIL图像
         fig = fig[0]
         image_array = fig2numpy(fig)
-
-        # 将图像添加到TensorBoard
         writer.add_image(f'{task}/{name}', image_array, step, dataformats='HWC')
 
         plt.clf()
@@ -260,7 +256,6 @@ def save_model(cfg, step, mod, model, optimizer, scheduler):
     }, f'{cfg.save_dir}/ckpt_{mod}.pt')
 
 def cleanup():
-    # 清理分布式进程组
     if dist.is_initialized():
         dist.destroy_process_group()
 
@@ -282,7 +277,7 @@ def train_match_model(config):
         print(f"Exception occurred: {e}")
         cleanup()
 
-# Test function for mathcing model
+# Test entry for the matching model
 @torch.no_grad()
 def test_match_model(config):
     os.environ["CUDA_VISIBLE_DEVICES"] = config.gpus

@@ -243,38 +243,35 @@ def world_2_camera(c2w):
     return viewmat
 
 def draw_match(save_path, image1, image2, match_points_img1, match_points_img2):
-    # 将两个图像水平拼接
+    """Horizontally stack two images and draw match correspondences."""
     height1, width1 = image1.shape[:2]
     height2, width2 = image2.shape[:2]
     new_height = max(height1, height2)
     new_width = width1 + width2
     new_image = np.zeros((new_height, new_width, 3), dtype=np.uint8)
 
-    # 将灰度图像转换为BGR图像
-    # image1_bgr = cv2.cvtColor(image1, cv2.COLOR_GRAY2BGR)
-    # image2_bgr = cv2.cvtColor(image2, cv2.COLOR_GRAY2BGR)
-
-    # 放置图像
     new_image[:height1, :width1] = image1
-    new_image[:height2, width1:width1+width2] = image2
-    
-    # 生成多种颜色
-    # num_matches = len(match_points_img1)
-    # hsv_colors = [(i / num_matches, 1, 1) for i in range(num_matches)]
-    # bgr_colors = [tuple(int(c * 255) for c in cv2.cvtColor(np.uint8([[[(h, s, v)]]]), cv2.COLOR_HSV2BGR)[0, 0]) for (h, s, v) in hsv_colors]
-    
-    bgr_colors = []
-    for i in range(len(match_points_img1)):
-        color = (int(255/len(match_points_img1)*(i+1)), int(255/len(match_points_img1)*(i+1)), int(255/len(match_points_img1)*(i+1)))
-        bgr_colors.append(color)
-        
-    # 可视化匹配点和连线
+    new_image[:height2, width1 : width1 + width2] = image2
+
+    n = len(match_points_img1)
+    step = max(1, 255 // max(n, 1))
+    bgr_colors = [
+        (int(step * (i + 1)), int(step * (i + 1)), int(step * (i + 1)))
+        for i in range(n)
+    ]
+
     for (x1, y1), (x2, y2), color in zip(match_points_img1, match_points_img2, bgr_colors):
         if x2 >= 512 or y2 >= 512 or x2 <= 0 or y2 <= 0:
             continue
-        cv2.circle(new_image, (int(x1), int(y1)), 5, color, -1)  # 绿色圆圈
-        cv2.circle(new_image, (int(x2 + width1), int(y2)), 5, color, -1)  # 绿色圆圈
-        cv2.line(new_image, (int(x1), int(y1)), (int(x2 + width1), int(y2)), color, 2)  # 蓝色连线
+        cv2.circle(new_image, (int(x1), int(y1)), 5, color, -1)
+        cv2.circle(new_image, (int(x2 + width1), int(y2)), 5, color, -1)
+        cv2.line(
+            new_image,
+            (int(x1), int(y1)),
+            (int(x2 + width1), int(y2)),
+            color,
+            2,
+        )
         
     cv2.imwrite(save_path, new_image)
     

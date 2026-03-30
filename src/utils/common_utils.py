@@ -10,26 +10,18 @@ import numpy as np
 
 
 def to_homogeneous(points):
-    # points 是形状为 (n, 3) 的点云坐标
+    """Append a column of ones: (n, 3) -> (n, 4)."""
     n = points.shape[0]
-    
-    # 创建一个形状为 (n, 1) 的列向量，所有值为 1
     ones = np.ones((n, 1))
-    
-    # 在点云坐标后添加一个列，值为 1
     homogeneous_points = np.hstack((points, ones))
     
     return homogeneous_points
 
 def to_homogeneous_batch(points):
-    # points 是形状为 (b, n, 3) 的点云坐标
+    """Append a column of ones: (b, n, 3) -> (b, n, 4)."""
     b, n = points.shape[0], points.shape[1]
-    
-    # 创建一个形状为 (b, n, 1) 的列向量，所有值为 1
-    ones = torch.ones((b, n, 1)).to(points.device)
-    
-    # 在点云坐标后添加一个列，值为 1
-    homogeneous_points =  torch.cat((points, ones), dim=2)
+    ones = torch.ones((b, n, 1), device=points.device, dtype=points.dtype)
+    homogeneous_points = torch.cat((points, ones), dim=2)
     
     return homogeneous_points 
 
@@ -254,40 +246,40 @@ def sample_images_at_mc_locs(target_images, sampled_rays_xy):
     )
 
 def generate_custom_random_string(length, characters):
-    # 从自定义字符集中随机选择字符
-    random_string = ''.join(random.choices(characters, k=length))
-    return random_string
+    return "".join(random.choices(characters, k=length))
+
 
 def generate_uuid_string(length):
-    # 生成 UUID 并转换为字符串
-    uuid_string = str(uuid.uuid4()).replace('-', '')
-    # 截取指定长度
+    uuid_string = str(uuid.uuid4()).replace("-", "")
     return uuid_string[:length]
+
 
 def draw_circle(image, center, radius, color):
     """
-    在图像上绘制圆点。
+    Draw a filled circle on an image tensor.
 
-    参数：
-        image (torch.Tensor): 输入的图像张量，形状为 (C, H, W)。
-        center (tuple): 圆点的中心坐标 (x, y)。
-        radius (int): 圆点的半径。
-        color (tuple): 圆点的颜色 (R, G, B)。
+    Args:
+        image: (C, H, W).
+        center: (x, y) in pixel coordinates.
+        radius: Circle radius in pixels.
+        color: (R, G, B) per channel.
 
-    返回：
-        torch.Tensor: 绘制圆点后的图像张量。
+    Returns:
+        Tensor of shape (C, H, W) with the disk painted.
     """
     C, H, W = image.shape
-    x, y = center
+    dev, dtype = image.device, image.dtype
+    x = torch.as_tensor(center[0], device=dev, dtype=dtype)
+    y = torch.as_tensor(center[1], device=dev, dtype=dtype)
 
-    # 创建网格坐标
-    Y, X = torch.meshgrid(torch.arange(H).to(x.device), torch.arange(W).to(x.device))
-    # 计算每个像素到圆心的距离
+    Y, X = torch.meshgrid(
+        torch.arange(H, device=dev, dtype=dtype),
+        torch.arange(W, device=dev, dtype=dtype),
+        indexing="ij",
+    )
     distance = torch.sqrt((X - x) ** 2 + (Y - y) ** 2)
-    # 创建掩码（圆点区域为 True）
     mask = distance <= radius
 
-    # 将掩码应用到图像上
     for c in range(C):
         image[c, mask] = color[c]
 
