@@ -3,6 +3,7 @@ dataset1/
 output/
 exp/
 weights/
+weight/
 logs/
 vis/
 vis_val/

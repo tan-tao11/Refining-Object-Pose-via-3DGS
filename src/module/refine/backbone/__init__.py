@@ -1,5 +1,18 @@
-from .resnet import ResNetFPN_8_2
+from .resnet import ResNetFPN_8_2, ResNetFPN_16_4
 from math import log
+
+
+def build_backbone(cfg):
+    if cfg.type == 'ResNetFPN':
+        res = list(cfg.resolution)
+        if res == [8, 2]:
+            return ResNetFPN_8_2(cfg.resnetfpn)
+        elif res == [16, 4]:
+            return ResNetFPN_16_4(cfg.resnetfpn)
+        else:
+            raise NotImplementedError(f"Unsupported resolution: {cfg.resolution}")
+    else:
+        raise ValueError(f"Unsupported backbone type: {cfg.type}")
 
 def _get_win_rel_scale(config):
     try:

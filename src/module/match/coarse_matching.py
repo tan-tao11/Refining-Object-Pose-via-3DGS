@@ -53,6 +53,83 @@ def build_feat_normalizer(method, **kwargs):
     else:
         raise ValueError
 
+
+class AdaptiveImageFeatureAggregation(nn.Module):
+    """Reduce image tokens before coarse attention and restore them afterwards."""
+
+    def __init__(self, feature_dim, kernel_size=3, stride=2):
+        super().__init__()
+        padding = kernel_size // 2
+        self.stride = stride
+        self.query_aggregator = nn.Sequential(
+            nn.Conv2d(
+                feature_dim,
+                feature_dim,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                groups=feature_dim,
+                bias=False,
+            ),
+            nn.GroupNorm(1, feature_dim),
+            nn.GELU(),
+            nn.Conv2d(
+                feature_dim,
+                feature_dim,
+                kernel_size=kernel_size,
+                stride=1,
+                padding=padding,
+                groups=feature_dim,
+                bias=False,
+            ),
+            nn.GroupNorm(1, feature_dim),
+            nn.GELU(),
+        )
+        self.kv_aggregator = nn.MaxPool2d(
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+        )
+        self.fusion = nn.Sequential(
+            nn.Conv2d(feature_dim * 2, feature_dim, kernel_size=1, bias=False),
+            nn.GroupNorm(1, feature_dim),
+            nn.GELU(),
+        )
+
+    def forward(self, feat_query, query_hw, query_mask=None):
+        h, w = query_hw
+        feat_query_map = rearrange(feat_query, "n (h w) c -> n c h w", h=h, w=w)
+
+        query_tokens = self.query_aggregator(feat_query_map)
+        kv_tokens = self.kv_aggregator(feat_query_map)
+        reduced_feat_query = self.fusion(torch.cat([query_tokens, kv_tokens], dim=1))
+        reduced_hw = reduced_feat_query.shape[-2:]
+        reduced_feat_query = rearrange(reduced_feat_query, "n c h w -> n (h w) c")
+
+        reduced_mask = None
+        if query_mask is not None:
+            query_mask_map = query_mask.float().reshape(-1, 1, h, w)
+            reduced_mask = self.kv_aggregator(query_mask_map).reshape(query_mask.shape[0], -1) > 0
+
+        return reduced_feat_query, reduced_mask, reduced_hw
+
+    def restore(self, feat_query, reduced_hw, query_hw):
+        reduced_h, reduced_w = reduced_hw
+        h, w = query_hw
+        feat_query_map = rearrange(
+            feat_query,
+            "n (h w) c -> n c h w",
+            h=reduced_h,
+            w=reduced_w,
+        )
+        feat_query_map = F.interpolate(
+            feat_query_map,
+            size=(h, w),
+            mode="bilinear",
+            align_corners=False,
+        )
+        return rearrange(feat_query_map, "n c h w -> n (h w) c")
+
 class CoarseMatching(nn.Module):
     def __init__(self, config, profiler=None):
         super().__init__()

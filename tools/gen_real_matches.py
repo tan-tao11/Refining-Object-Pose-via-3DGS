@@ -267,7 +267,7 @@ if __name__ == "__main__":
         sequences = os.listdir(data_dir)
         sequences.sort(key=lambda x: int(x.split('-')[0]))
         
-        for sequence in tqdm(sequences[38:], desc="sequences", ncols=80):
+        for sequence in tqdm(sequences, desc="sequences", ncols=80):
             try:
                 sequence_path = os.path.join(data_dir, sequence)
                 ckpt_folder = os.path.join(ckpt_root, sequence, 'ckpts')
@@ -397,7 +397,8 @@ if __name__ == "__main__":
                             
                             pbar_sequence.update(1)
                             counter += 1
-                        except:
+                        except Exception as e:
+                            print(f'  Warning: {img_file} failed: {e}')
                             continue
                         
                 # Filter out 3D points

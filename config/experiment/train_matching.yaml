@@ -157,6 +157,6 @@ train:
 
 merge_output_dir: 'output/merged_anno'
 
-gpus: '0,1'
+gpus: '4,5'
 
 save_dir: ckpts/${task_name}

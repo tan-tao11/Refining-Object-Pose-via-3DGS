@@ -3,15 +3,21 @@ from loguru import logger
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from kornia.geometry.subpix import dsnt
 from kornia.utils.grid import create_meshgrid
+from einops.einops import rearrange
 
 class FineMatching(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
         self._type = config['s2d']['type']
+        self.fine_3d_proj = None
+        self.fine_3d_gate = None
+        self.fine_2d_proj = None
+        self.fine_2d_gate = None
         
         self.apply(self._init_weights)
         
@@ -24,6 +30,95 @@ class FineMatching(nn.Module):
             nn.init.constant_(m.weight, 1)
             if m.bias is not None:  # pyre-ignore
                 nn.init.constant_(m.bias, 0)
+
+    def _build_fusion_layers(self, coarse_3d_dim, fine_dim, coarse_2d_dim, device):
+        if self.fine_3d_proj is None:
+            self.fine_3d_proj = nn.Linear(coarse_3d_dim, fine_dim, bias=False).to(device)
+            self.fine_3d_gate = nn.Sequential(
+                nn.Linear(coarse_3d_dim + fine_dim, fine_dim),
+                nn.GELU(),
+                nn.Linear(fine_dim, fine_dim),
+                nn.Sigmoid(),
+            ).to(device)
+            self.fine_3d_proj.apply(self._init_weights)
+            self.fine_3d_gate.apply(self._init_weights)
+
+        if self.fine_2d_proj is None:
+            self.fine_2d_proj = nn.Sequential(
+                nn.Conv2d(coarse_2d_dim, fine_dim, kernel_size=3, padding=1, bias=False),
+                nn.BatchNorm2d(fine_dim),
+                nn.GELU(),
+            ).to(device)
+            self.fine_2d_gate = nn.Sequential(
+                nn.Conv2d(fine_dim * 2, fine_dim, kernel_size=3, padding=1, bias=False),
+                nn.BatchNorm2d(fine_dim),
+                nn.GELU(),
+                nn.Conv2d(fine_dim, fine_dim, kernel_size=1),
+                nn.Sigmoid(),
+            ).to(device)
+            self.fine_2d_proj.apply(self._init_weights)
+            self.fine_2d_gate.apply(self._init_weights)
+
+    def _adaptive_fine_feature_fusion(self, feat_db_3d, feat_query_unfolded, data):
+        if "coarse_desc3d_db" not in data or "coarse_query_feat_c" not in data:
+            return feat_db_3d, feat_query_unfolded
+
+        M, WW, fine_dim = feat_query_unfolded.shape
+        if M == 0:
+            return feat_db_3d, feat_query_unfolded
+
+        coarse_desc3d = data["coarse_desc3d_db"][data["b_ids"], data["i_ids"]]
+        coarse_query_feat = data["coarse_query_feat_c"]
+        coarse_3d_dim = coarse_desc3d.shape[-1]
+        coarse_2d_dim = coarse_query_feat.shape[-1]
+        self._build_fusion_layers(coarse_3d_dim, fine_dim, coarse_2d_dim, feat_query_unfolded.device)
+
+        feat_db_3d_center = self.select_left_point(feat_db_3d, data)
+        coarse_desc3d_proj = self.fine_3d_proj(coarse_desc3d)
+        fuse_3d_gate = self.fine_3d_gate(torch.cat([coarse_desc3d, feat_db_3d_center], dim=-1))
+        new_center = fuse_3d_gate * feat_db_3d_center + (1 - fuse_3d_gate) * coarse_desc3d_proj
+        center_idx = feat_db_3d.shape[1] // 2
+        feat_db_3d = torch.cat([
+            feat_db_3d[:, :center_idx, :],
+            new_center.unsqueeze(1),
+            feat_db_3d[:, center_idx + 1:, :],
+        ], dim=1)
+
+        h_c, w_c = data["q_hw_c"]
+        h_f, w_f = data["q_hw_f"]
+        W = int(math.sqrt(WW))
+        stride = h_f // h_c
+
+        coarse_query_map = rearrange(coarse_query_feat, "n (h w) c -> n c h w", h=h_c, w=w_c)
+        coarse_query_map = self.fine_2d_proj(coarse_query_map)
+        coarse_query_map = F.interpolate(
+            coarse_query_map,
+            size=(h_f, w_f),
+            mode="bilinear",
+            align_corners=False,
+        )
+        coarse_query_unfolded = F.unfold(
+            coarse_query_map,
+            kernel_size=(W, W),
+            stride=stride,
+            padding=W // 2,
+        )
+        coarse_query_unfolded = rearrange(
+            coarse_query_unfolded,
+            "n (c ww) l -> n l ww c",
+            ww=W ** 2,
+        )
+        coarse_query_unfolded = coarse_query_unfolded[data["b_ids"], data["j_ids"]]
+
+        feat_query_map = rearrange(feat_query_unfolded, "m (h w) c -> m c h w", h=W, w=W)
+        coarse_query_map_local = rearrange(coarse_query_unfolded, "m (h w) c -> m c h w", h=W, w=W)
+        fuse_2d_gate = self.fine_2d_gate(torch.cat([feat_query_map, coarse_query_map_local], dim=1))
+        feat_query_map = (
+            fuse_2d_gate * feat_query_map + (1 - fuse_2d_gate) * coarse_query_map_local
+        )
+        feat_query_unfolded = rearrange(feat_query_map, "m c h w -> m (h w) c")
+
+        return feat_db_3d, feat_query_unfolded
 
     def forward(self, feat_db_3d, feat_query_unfolded, data):
         """
@@ -53,6 +148,12 @@ class FineMatching(nn.Module):
                 'mkpts_query_f': data['mkpts_query_c'],
             })
             return
+
+        feat_db_3d, feat_query_unfolded = self._adaptive_fine_feature_fusion(
+            feat_db_3d,
+            feat_query_unfolded,
+            data,
+        )
 
         feat_db_3d_selected = self.select_left_point(feat_db_3d, data) # [M, C]
         

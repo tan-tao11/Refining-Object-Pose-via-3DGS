@@ -54,7 +54,7 @@ def validation(model, config, writer, step=0, gpu_id=0):
     val_plot_invervel = max(num_val_batches // 5, 1)
     figures = []
     metrics_dict = {}
-    for batch_idx, data in tqdm(enumerate(data_loader)):
+    for batch_idx, data in tqdm(enumerate(data_loader), ncols=100):
         data = {key: value.to(device) if isinstance(value, torch.Tensor) else value for key, value in data.items()}
         # Forward
         data = model(data)
@@ -171,7 +171,7 @@ def train_match_worker(gpu_id: int, config: OmegaConf):
 
     # Training loop setup
     if gpu_id == 0:
-        progress_bar = tqdm(total=total_steps, ncols=200)
+        progress_bar = tqdm(total=total_steps, ncols=100)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         exp_name = f"train_match_0416_{timestamp}"  # 示例：exp1_cnn_lr0.01_20231015_142022
         writer = SummaryWriter(log_dir=osp.join(config.train.save_dir, exp_name))
@@ -326,7 +326,7 @@ def test_match_model(config):
     
     num_val_batches = len(data_loader)
     metrics_dict = {}
-    for batch_idx, data in tqdm(enumerate(data_loader)):
+    for batch_idx, data in tqdm(enumerate(data_loader), ncols=100):
         data = {key: value.to('cuda:0') if isinstance(value, torch.Tensor) else value for key, value in data.items()}
         # Forward
         time_start = time.time()

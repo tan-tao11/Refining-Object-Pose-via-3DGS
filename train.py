@@ -1,5 +1,6 @@
 import argparse
 from match import train_match_model
+from align import train_refine_model
 from omegaconf import OmegaConf
 
 def main():
@@ -15,7 +16,7 @@ def main():
     if args.training_type == "match":
         train_match_model(cfg)
     elif args.training_type == "align":
-        train_match_model(cfg)
+        train_refine_model(cfg)
 
 if __name__ == '__main__':
     main()

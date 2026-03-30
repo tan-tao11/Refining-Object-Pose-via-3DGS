@@ -245,8 +245,12 @@ def merge_align(cfg, names, split='train'):
             name,
             'ckpts'
         )
+        gs_ckpts = glob.glob(f'{gs_model_dir}/*.pt')
+        if not gs_ckpts:
+            logger.warning(f"No GS checkpoint found in {gs_model_dir}, skipping {name}")
+            continue
         seq_dirs.append(seq_dir)
-        gs_dirs.append(glob.glob(f'{gs_model_dir}/*.pt')[-1])
+        gs_dirs.append(gs_ckpts[-1])
 
     if split == "train":
         annos = merge_align_train(seq_dirs, gs_dirs, interval=5)

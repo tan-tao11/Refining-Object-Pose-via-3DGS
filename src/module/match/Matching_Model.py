@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from loguru import logger
 from einops.einops import rearrange, repeat
 from src.utils.load_model import load_backbone
 from src.utils.position_encoding import KeypointEncoding_linear, PositionEncodingSine
 from src.utils.normalize import normalize_3d_keypoints
 from .loftr_module import LocalFeatureTransformer, FinePreprocess
-from .coarse_matching import CoarseMatching
+from .coarse_matching import AdaptiveImageFeatureAggregation, CoarseMatching
 from .fine_matching import FineMatching
 from .backbone import (
     _extract_backbone_feats,
@@ -52,6 +53,9 @@ class Matching_Model(nn.Module):
 
         # Self- and Cross-attention between query image and reference 3d keypoints
         self.loftr_coarse = LocalFeatureTransformer(self.cfg.loftr_coarse,)
+        self.coarse_query_aggregator = AdaptiveImageFeatureAggregation(
+            self.cfg.loftr_coarse.d_model
+        )
 
         self.coarse_matching = CoarseMatching(
             self.cfg.coarse_matching,
@@ -155,13 +159,36 @@ class Matching_Model(nn.Module):
         )  #(B, c, N)
 
         # Flatten query image mask if it exists
-        query_mask = data["query_image_mask"].flatten(-2) if "query_image_mask" in data else None
+        query_mask = None
+        if "query_image_mask" in data:
+            query_mask = F.interpolate(
+                data["query_image_mask"].float().unsqueeze(1),
+                size=data["q_hw_c"],
+                mode="nearest",
+            ).flatten(-2).squeeze(1) > 0
+
+        query_feat_c, query_mask_reduced, reduced_q_hw_c = self.coarse_query_aggregator(
+            query_feat_c,
+            data["q_hw_c"],
+            query_mask=query_mask,
+        )
 
         # Perform self- and coarse-level attention
         desc3d_db, query_feat_c = self.loftr_coarse(
             desc3d_db,
             query_feat_c,
-            query_mask=query_mask,
+            query_mask=query_mask_reduced,
+        )
+        query_feat_c = self.coarse_query_aggregator.restore(
+            query_feat_c,
+            reduced_q_hw_c,
+            data["q_hw_c"],
+        )
+        data.update(
+            {
+                "coarse_desc3d_db": desc3d_db,
+                "coarse_query_feat_c": query_feat_c,
+            }
         )
 
         # Match coarse-level features

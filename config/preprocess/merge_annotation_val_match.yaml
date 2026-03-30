@@ -3,7 +3,7 @@ task_name: onepose_train_match
 match_type: 'softmax'
 split: 'val'
 
-data_base_dir: 'dataset_local/OnePose'
+data_base_dir: 'dataset/OnePose'
 gs_dir: 'output/anno_match/OnePose/val_data'
 merge_output_dir: 'output/merged_anno'
 
@@ -14,7 +14,7 @@ names:
     - "0602"
     - "0603"
     - "0604"
-    #- "0605"
+    - "0605"
     - "0606"
     - "0607"
     - "0608"

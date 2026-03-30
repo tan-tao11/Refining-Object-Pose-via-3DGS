@@ -1,8 +1,9 @@
-exp_name: train_refine
-task_name: onepose_train_align
+exp_name: test_refine
+task_name: onepose_test_align
 
 model:
   ckpt: null
+  # ckpt: ckpts/onepose_train_align/ckpt_005000.pt
 
   backbone:
     type: ResNetFPN
@@ -20,7 +21,7 @@ model:
   d_model: 256
   nhead: 8
   d_ffn: 1024
-  dropout: 0.1
+  dropout: 0.0
   num_rot_layers: 4
   num_trans_layers: 4
 
@@ -30,25 +31,11 @@ model:
 
 dataset:
   data_root: dataset_local/OnePose
-  train_anno_file: ${merge_output_dir}/${task_name}/train.json
+  test_anno_file: ${merge_output_dir}/${task_name}/test.json
   img_resize: [512, 512]
   sigma_rot: 0.1
   sigma_trans: 0.05
 
-train:
-  batch_size: 1
-  data_workers: 4
-  learning_rate: 1e-4
-  max_epochs: 10
-  save_dir: output/${exp_name}
-  save_itr: 5000
-
-  loss:
-    rot_weight: 1.0
-    trans_weight: 1.0
-
 merge_output_dir: 'output/merged_anno'
 
-gpus: '4,5'
-
-save_dir: ckpts/${task_name}
+gpus: '0'
