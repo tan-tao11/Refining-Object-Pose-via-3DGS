@@ -1,4 +1,4 @@
-# SNOP-GS
+# Refining-Object-Pose-via-3DGS
 
 Object pose estimation via 3D Gaussian Splatting with a two-stage pipeline: **Match** (coarse pose via 2D-3D matching + PnP) and **Refine** (pose refinement via 3DGS).
 
