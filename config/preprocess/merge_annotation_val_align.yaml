@@ -1,0 +1,38 @@
+type: merge_anno
+task_name: onepose_train_align
+split: 'val'
+
+data_base_dir: 'dataset/OnePose'
+gs_dir: 'output/gs_models/OnePose/val_data'
+merge_output_dir: 'output/merged_anno'
+
+names:
+    # Val set
+    - "0601"
+    - "0602"
+    - "0603"
+    - "0604"
+    - "0605"
+    - "0606"
+    - "0607"
+    - "0608"
+    - "0609"
+    - "0610"
+    - "0611"
+    - "0612"
+    - "0613"
+    - "0614"
+    - "0615"
+    - "0616"
+    - "0617"
+    - "0618"
+    - "0619"
+    - "0620"
+    - "0621"
+
+
+datamodule:
+    data_dir: ${data_base_dir}
+    gs_dir: ${gs_dir}
+
+    out_path: ${merge_output_dir}/${task_name}/${split}.json

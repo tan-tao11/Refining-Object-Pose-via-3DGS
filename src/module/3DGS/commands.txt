@@ -1,0 +1,1 @@
+python -m src.module.3DGS.trainer default  --data_dir dataset_local/OnePose/train_data/0410-huiyuan-box/3DGS --data_factor 4 --result_dir src/module/3DGS/results/huiyuan --init_type random --disable_viewer  --strategy.prune-opa 0.1

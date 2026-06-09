@@ -1,0 +1,34 @@
+/dataset
+/output
+/exp
+/weights
+/weight
+/logs
+/vis
+/vis_val
+/ckpts
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.log
+*.pth
+*.pt
+*.ckpt
+*.bin
+*.safetensors
+/match.png
+/match_all.png
+
+# Third-party / model assets under mask tools
+tools/mask/checkpoints/
+tools/mask/FastSAM/
+tools/mask/GroundedSegmentAnything/
+tools/mask/GroundingDINO/
+tools/mask/MobileSAM/
+
+# Bundled sample data / results inside source tree
+src/module/3DGS/data/
+src/module/3DGS/results/
+src/module/3DGS1/data/
+src/module/3DGS1/results/
