@@ -1,0 +1,9 @@
+[submodule "fused-ssim"]
+	path = fused-ssim
+	url = git@github.com:rahul-goel/fused-ssim.git
+[submodule "tools/mask/GroundingDINO"]
+	path = tools/mask/GroundingDINO
+	url = git@github.com:IDEA-Research/GroundingDINO.git
+[submodule "Grounded-Segment-Anything"]
+	path = Grounded-Segment-Anything
+	url = https://github.com/IDEA-Research/Grounded-Segment-Anything.git

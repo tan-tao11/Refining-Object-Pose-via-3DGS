@@ -7,8 +7,8 @@ import os.path as osp
 import numpy as np
 from tqdm import tqdm
 from .mask.predict_masks import predict_masks
-from .mask.predict_masks_fastsam import predict_masks_fastsam
-from .mask.predict_masks_mobilesam import predict_masks_mobilesam
+# from .mask.predict_masks_fastsam import predict_masks_fastsam
+# from .mask.predict_masks_mobilesam import predict_masks_mobilesam
 from .mask.downsize_mask import downsize_mask
 
 warnings.filterwarnings("ignore")
