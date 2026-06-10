@@ -21,8 +21,14 @@ cd SNOP-GS
 
 ### **2. Install Dependencies**
 ```bash
-conda env create -f environment.yaml
+git submodule init --recurse
+conda env create -n snop_gs
 conda activate snop_gs
+conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia
+conda env update -f environment.yaml
+
+pip install --no-build-isolation tools/mask/GroundingDINO
+pip install --no-build-isolation -e Grounded-Segment-Anything/segment_anything
 ```
 
 ### **3. Prepare Datasets**
