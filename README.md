@@ -15,17 +15,37 @@ SNOP-GS is a two-stage framework for **novel object pose estimation**, leveragin
 ## **Quick Start**
 ### **1. Clone Repository**
 ```bash
-git clone https://github.com/tan-tao11/SNOP-GS.git
+git clone --recursive https://github.com/tan-tao11/SNOP-GS.git
 cd SNOP-GS
+```
+
+For an existing clone, initialize the bundled third-party dependencies:
+```bash
+git submodule update --init --recursive
 ```
 
 ### **2. Install Dependencies**
 ```bash
 conda env create -f environment.yaml
 conda activate snop_gs
+pip install --no-build-isolation ./third_party/fused-ssim
+pip install --no-build-isolation -e ./tools/mask/GroundingDINO
+pip install -e ./tools/mask/GroundedSegmentAnything/segment_anything
 ```
 
-### **3. Prepare Datasets**
+### **3. Download Segmentation Weights**
+The default preprocessing command uses GroundingDINO with SAM ViT-H. Download
+the following weights and place them in `tools/mask/checkpoints/`:
+
+- `groundingdino_swint_ogc.pth`: [GroundingDINO weights](https://github.com/IDEA-Research/GroundingDINO#checkpoint)
+- `sam_vit_h_4b8939.pth`: [SAM ViT-H weights](https://github.com/facebookresearch/segment-anything#model-checkpoints)
+
+Optional mask backends require additional weights in the same directory:
+
+- `FastSAM-x.pt` for `--sam_model fast_sam`
+- `mobile_sam.pt` for `--sam_model mobile_sam`
+
+### **4. Prepare Datasets**
 ### Download [OnePose](https://github.com/zju3dv/OnePose_Plus_Plus) dataset and organize it like dataset/OnePose/train
 #### Preprocess raw data
 ```bash
@@ -57,7 +77,7 @@ python -m tools.merge --config config/preprocess/merge_annotation_train_match.ya
 python -m tools.merge --config config/preprocess/merge_annotation_train_align.yaml
 ```
 
-### **4. Run Training**
+### **5. Run Training**
 **Train Match model:**
 ```bash
 python train.py --training_type match --config config/experiment/train_matching.yaml
@@ -68,7 +88,7 @@ python train.py --training_type match --config config/experiment/train_matching.
 python train.py --training_type align --config config/experiment/train_refining.yaml
 ```
 
-### **5. Run Testing**
+### **6. Run Testing**
 Set `model.ckpt` in each config to the trained checkpoint path before testing.
 
 **Match only:**

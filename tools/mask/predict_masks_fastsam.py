@@ -1,11 +1,19 @@
 import argparse
 import cv2
 import os
+import sys
 import warnings
 from tqdm import tqdm
 import os.path as osp
 from ultralytics import YOLO
-from .FastSAM.tools import *
+
+EFFICIENT_SAM_ROOT = osp.join(
+    osp.dirname(__file__), "GroundedSegmentAnything", "EfficientSAM"
+)
+if EFFICIENT_SAM_ROOT not in sys.path:
+    sys.path.insert(0, EFFICIENT_SAM_ROOT)
+
+from FastSAM.tools import *
 from groundingdino.util.inference import load_model, load_image, predict, annotate, Model
 from torchvision.ops import box_convert
 import ast

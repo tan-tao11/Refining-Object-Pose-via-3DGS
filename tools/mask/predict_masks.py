@@ -7,8 +7,14 @@ import json
 import torch
 from PIL import Image
 
-sys.path.append(os.path.join(os.getcwd(), "GroundingDINO"))
-sys.path.append(os.path.join(os.getcwd(), "segment_anything"))
+MASK_ROOT = os.path.dirname(__file__)
+GROUNDING_DINO_ROOT = os.path.join(MASK_ROOT, "GroundingDINO")
+SEGMENT_ANYTHING_ROOT = os.path.join(
+    MASK_ROOT, "GroundedSegmentAnything", "segment_anything"
+)
+for dependency_root in (GROUNDING_DINO_ROOT, SEGMENT_ANYTHING_ROOT):
+    if dependency_root not in sys.path:
+        sys.path.insert(0, dependency_root)
 
 
 # Grounding DINO

@@ -1,5 +1,6 @@
 import cv2
 import os
+import sys
 import numpy as np
 import supervision as sv
 import argparse
@@ -9,7 +10,14 @@ from tqdm import tqdm
 
 from groundingdino.util.inference import Model
 from segment_anything import SamPredictor
-from .MobileSAM.setup_mobile_sam import setup_model
+
+EFFICIENT_SAM_ROOT = os.path.join(
+    os.path.dirname(__file__), "GroundedSegmentAnything", "EfficientSAM"
+)
+if EFFICIENT_SAM_ROOT not in sys.path:
+    sys.path.insert(0, EFFICIENT_SAM_ROOT)
+
+from MobileSAM.setup_mobile_sam import setup_model
 
 def parse_args():
     parser = argparse.ArgumentParser()

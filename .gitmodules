@@ -1,0 +1,9 @@
+[submodule "third_party/fused-ssim"]
+	path = third_party/fused-ssim
+	url = https://github.com/rahul-goel/fused-ssim.git
+[submodule "tools/mask/GroundingDINO"]
+	path = tools/mask/GroundingDINO
+	url = https://github.com/IDEA-Research/GroundingDINO.git
+[submodule "tools/mask/GroundedSegmentAnything"]
+	path = tools/mask/GroundedSegmentAnything
+	url = https://github.com/IDEA-Research/Grounded-Segment-Anything.git

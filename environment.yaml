@@ -64,7 +64,7 @@ dependencies:
       - fonttools==4.56.0
       - frozenlist==1.5.0
       - fsspec==2025.2.0
-      - fused-ssim==0.0.0
+      - -e ./third_party/fused-ssim
       - grpcio==1.70.0
       - gsplat==1.4.0
       - h11==0.14.0
