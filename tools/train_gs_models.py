@@ -23,7 +23,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     obj_folders = os.listdir(args.data)
-    obj_folders.sort(key=lambda x: int(x.split('-')[0]))
+    try:
+        obj_folders.sort(key=lambda x: int(x.split('-')[0]))
+    except ValueError:
+        obj_folders.sort()
     
     # Build commands
     commands = []

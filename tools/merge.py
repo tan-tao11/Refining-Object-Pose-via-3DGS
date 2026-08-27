@@ -62,7 +62,6 @@ def merge_val_core(
     """ Merge validation annotaions of different objects"""
     obj_root = osp.join(data_dir, name)
     test_seq_paths = get_test_seq_path(obj_root, last_n_seq_as_test=last_n_seq_as_test)
-    
     for test_seq_path in test_seq_paths:
         anno_dir = osp.join(test_seq_path, "anno_loftr_gs")
         anno_names = os.listdir(anno_dir)
@@ -134,7 +133,7 @@ def merge_(cfg, names, split):
                 images,
                 annotations,
             )
-        elif split == "val":
+        elif split in ("val", "test"):
             img_id, ann_id = merge_val_core(
                 data_dir,
                 name,
@@ -235,11 +234,20 @@ def merge_align(cfg, names, split='train'):
                 name = id2datafullname[name]
             else:
                 logger.warning(f"id {name} not exist in sfm directory")
-        seq_dir = osp.join(
+        seq_dir_candidate = osp.join(
             data_dir,
             f'{split}_data',
             name,
         )
+
+        if Path(seq_dir_candidate).exists():
+            seq_dir = seq_dir_candidate
+        else:
+            seq_dir = osp.join(
+                data_dir,
+                name
+            )
+
         gs_model_dir = osp.join(
             gs_dir,
             name,
@@ -282,8 +290,10 @@ def main():
     parser = argparse.ArgumentParser(description='Merging data infos.')
     parser.add_argument("--config", type=str)
 
-    args = parser.parse_args()
+    args, overrides = parser.parse_known_args()
     cfg = OmegaConf.load(args.config)
+    if overrides:
+        cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(overrides))
 
     if 'match' in cfg.task_name:
         merge_anno(cfg)

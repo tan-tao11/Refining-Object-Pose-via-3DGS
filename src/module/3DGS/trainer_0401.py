@@ -29,7 +29,7 @@ from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMe
 from fused_ssim import fused_ssim
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from typing_extensions import Literal, assert_never
-from .utils import AppearanceOptModule, CameraOptModule, knn, rgb_to_sh, set_random_seed
+from .utils import AppearanceOptModule, CameraOptModule, knn, rgb_to_sh, save_ply, set_random_seed
 from .Utils.lib_bilagrid import (
     BilateralGrid,
     slice,
@@ -42,7 +42,6 @@ from gsplat.distributed import cli
 from gsplat.rendering import rasterization
 from gsplat.strategy import DefaultStrategy, MCMCStrategy
 from gsplat.optimizers import SelectiveAdam
-from gsplat.utils import save_ply
 
 from src.utils.load_model import load_backbone
 

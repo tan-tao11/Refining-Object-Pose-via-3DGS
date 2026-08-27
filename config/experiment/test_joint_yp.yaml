@@ -98,9 +98,9 @@ match:
     match_type: "softmax"
 
   dataset:
-    data_root: dataset_local/OnePose
+    data_root: dataset/${test_model_name}
     anno_dirs: outputs_${match.model.match_type}/anno
-    test_anno_file: ${merge_output_dir}/${match_task_name}/test.json
+    test_anno_file: ${merge_output_dir}/${match_task_name}/val.json
     augmentor_method: null
 
     load_3d_coarse: True
@@ -158,12 +158,16 @@ refine:
     img_resize: [512, 512]
 
 # ---- Global settings ----
-gs_base_dir: output/gs_models/OnePose/val_data
-match_task_name: onepose_test_match
+# train_model_name: yp_model_5_1_cropped #supply on the command line
+# test_model_name: yp_model_5_1_cropped #supply on the command line
+# out_model_name: yp_model_5_1_cropped #supply on the command line
+gs_base_dir: output/gs_models/${train_model_name}
+match_task_name: ${out_model_name}/merge_anno_match
 merge_output_dir: 'output/merged_anno'
+
 
 # Where per-sample coarse-pose match visualizations are saved, organized as
 # {coarse_vis_dir}/{obj_name}/{sample_idx:04d}.png. Set to null/false to disable.
-coarse_vis_dir: 'output/vis_coarse'
+coarse_vis_dir: output/vis_coarse/${out_model_name}
 
 gpus: '0'

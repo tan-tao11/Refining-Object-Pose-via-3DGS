@@ -262,8 +262,11 @@ if __name__ == "__main__":
             net = build_backbone('ResNetFPN_8_2', 'weight/LoFTR_wsize9.ckpt')
             
         # Preprocess each object sequence in order
-        sequences = os.listdir(data_dir)
-        sequences.sort(key=lambda x: int(x.split('-')[0]))
+        try:
+            sequences = os.listdir(data_dir)
+            sequences.sort(key=lambda x: int(x.split('-')[0]))
+        except ValueError:
+            sequences.sort()
         
         for sequence in tqdm(sequences, desc="sequences", ncols=80):
             try:
@@ -300,7 +303,7 @@ if __name__ == "__main__":
                 if data_type == 'train':
                     obj_folders = obj_folders
                 elif data_type == 'val':
-                    obj_folders = obj_folders[:1]
+                    obj_folders = obj_folders[-1:]
                 else:
                     raise TypeError
                 for obj_folder in obj_folders:
@@ -437,5 +440,6 @@ if __name__ == "__main__":
                 with open(anno2d_obj_file, 'w') as f:
                     json.dump(anno2d, f)
                     print(f'{sequence} down! length :{len(anno2d)}')
-            except:
+            except Exception as e:
                 print(f'Error for {sequence}')
+                print(e.with_traceback())

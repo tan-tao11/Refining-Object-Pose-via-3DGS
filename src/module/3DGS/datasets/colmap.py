@@ -163,7 +163,7 @@ class Parser:
         self.factor = factor
         self.normalize = normalize
         self.test_every = test_every
-
+        print(data_dir)
         colmap_dir = os.path.join(data_dir, "sparse/0/")
         if not os.path.exists(colmap_dir):
             colmap_dir = os.path.join(data_dir, "sparse")
@@ -470,7 +470,7 @@ class Dataset:
         
         K = self.parser.Ks_dict[camera_id].copy()  # undistorted K
         params = self.parser.params_dict[camera_id]
-        camtoworlds = self.parser.camtoworlds[index]
+        camtoworlds = self.parser.camtoworlds[index].copy()
         
         if mask is not None and np.max(mask) > 1:
             mask = mask / 255
@@ -483,28 +483,30 @@ class Dataset:
             )
             image = cv2.remap(image, mapx, mapy, cv2.INTER_LINEAR)
             x, y, w, h = self.parser.roi_undist_dict[camera_id]
-            image = image[y : y + h, x : x + w]
+            image = np.ascontiguousarray(image[y : y + h, x : x + w])
 
         if self.patch_size is not None:
             # Random crop.
             h, w = image.shape[:2]
             x = np.random.randint(0, max(w - self.patch_size, 1))
             y = np.random.randint(0, max(h - self.patch_size, 1))
-            image = image[y : y + self.patch_size, x : x + self.patch_size]
+            image = np.ascontiguousarray(
+                image[y : y + self.patch_size, x : x + self.patch_size]
+            )
             K[0, 2] -= x
             K[1, 2] -= y
 
         data = {
             "K": torch.from_numpy(K).float(),
             "camtoworld": torch.from_numpy(camtoworlds).float(),
-            "image": torch.from_numpy(image).float(),
+            "image": torch.from_numpy(np.ascontiguousarray(image)).float(),
             # "image_bk": torch.from_numpy(image_bk).float(),
             "image_id": item,  # the index of the image in the dataset
         }
         if image_bk is not None:
-            data["image_bk"] = torch.from_numpy(image_bk).float()
+            data["image_bk"] = torch.from_numpy(np.ascontiguousarray(image_bk)).float()
         if mask is not None:
-            data["mask"] = torch.from_numpy(mask).bool()
+            data["mask"] = torch.from_numpy(np.ascontiguousarray(mask)).bool()
 
         if self.load_depths:
             # projected points to image plane to get depths

@@ -8,10 +8,12 @@ def main():
     parser.add_argument("--testing_type", type=str, help="match | align | joint", default="match")
     parser.add_argument("--config", type=str, help="config file")
 
-    args = parser.parse_args()
+    args, overrides = parser.parse_known_args()
 
     if args.config is not None:
         cfg = OmegaConf.load(args.config)
+        if overrides:
+            cfg = OmegaConf.merge(cfg, OmegaConf.from_dotlist(overrides))
 
     if args.testing_type == "match":
         test_match_model(cfg)

@@ -66,8 +66,7 @@ def get_test_seq_path(obj_root, last_n_seq_as_test=1):
     seq_names = os.listdir(obj_root)
     seq_names = [seq_name for seq_name in seq_names if '-' in seq_name]
     seq_ids = [int(seq_name.split('-')[-1]) for seq_name in seq_names if '-' in seq_name]
-    
     test_obj_name = seq_names[0].split('-')[0]
-    test_seq_ids = sorted(seq_ids)[(-1 * last_n_seq_as_test):]
+    test_seq_ids = sorted(seq_ids)[-last_n_seq_as_test:]
     test_seq_paths = [osp.join(obj_root, test_obj_name + '-' + str(test_seq_id)) for test_seq_id in test_seq_ids]
     return test_seq_paths

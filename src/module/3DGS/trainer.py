@@ -29,7 +29,7 @@ from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMe
 from fused_ssim import fused_ssim
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from typing_extensions import Literal, assert_never
-from .utils import AppearanceOptModule, CameraOptModule, knn, rgb_to_sh, set_random_seed
+from .utils import AppearanceOptModule, CameraOptModule, knn, rgb_to_sh, save_ply, set_random_seed
 from .Utils.lib_bilagrid import (
     BilateralGrid,
     slice,
@@ -41,11 +41,6 @@ from gsplat.compression import PngCompression
 from gsplat.distributed import cli
 from gsplat.rendering import rasterization
 from gsplat.strategy import DefaultStrategy, MCMCStrategy
-
-try:
-    from gsplat.utils import save_ply
-except ImportError:
-    save_ply = None
 
 try:
     from gsplat.optimizers import SelectiveAdam
@@ -98,7 +93,7 @@ class Config:
     # Steps to save the model
     save_steps: List[int] = field(default_factory=lambda: [30_000])
     # Whether to save ply file (storage size can be large)
-    save_ply: bool = False
+    save_ply: bool = True
     # Steps to save the model as ply
     ply_steps: List[int] = field(default_factory=lambda: [30_000])
 
@@ -288,8 +283,8 @@ def create_splats_with_optimizers(
         ("opacities", torch.nn.Parameter(opacities), 5e-2),
     ]
     
-    if cfg.feature_rendering:
-        gs_features = torch.rand((init_num_pts, cfg.feature_channel))
+    if feature_rendering:
+        gs_features = torch.rand((init_num_pts, feature_channel))
         gs_features = gs_features[world_rank::world_size]
         params.append(("gs_features", torch.nn.Parameter(gs_features), 1e-3))
 

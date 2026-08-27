@@ -29,7 +29,7 @@ model:
     pos_emb_shape: [256, 256]
 
 dataset:
-  data_root: dataset_local/OnePose
+  data_root: dataset/OnePose
   train_anno_file: ${merge_output_dir}/${task_name}/train.json
   val_anno_file: ${merge_output_dir}/${task_name}/val.json
   img_resize: [512, 512]
@@ -42,7 +42,7 @@ train:
   learning_rate: 1e-4
   max_epochs: 10
   save_dir: output/${exp_name}
-  save_itr: 5000
+  save_itr: 500
   val_itr: 500
 
   loss:
@@ -51,6 +51,6 @@ train:
 
 merge_output_dir: 'output/merged_anno'
 
-gpus: '4,5,6,7'
+gpus: '0,1'
 
 save_dir: ckpts/${task_name}

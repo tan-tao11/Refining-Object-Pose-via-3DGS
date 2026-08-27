@@ -2,8 +2,10 @@ exp_name: test_match_0416
 task_name: onepose_test_match
 
 model:
-  ckpt: null
-  # ckpt: ckpts/onepose_train_match/ckpt_090000.pt
+  # ckpt: null
+  # ckpt: ckpts/onepose_train_match/ckpt_030000.pt
+  ckpt: ckpts/onepose_train_match/ckpt_070000.pt
+
 
   profiler: null
 
@@ -95,7 +97,7 @@ model:
   match_type: "softmax" #"sigmoid" #"softmax"
 
 dataset:
-  data_root: dataset_local/OnePose
+  data_root: dataset/OnePose
   anno_dirs: outputs_${model.match_type}/anno
   test_anno_file: ${merge_output_dir}/${task_name}/test.json
   augmentor_method: null
@@ -154,5 +156,5 @@ train:
 
 merge_output_dir: 'output/merged_anno'
 
-gpus: '1'
+gpus: '0'
 save_dir: ckpts/${task_name}

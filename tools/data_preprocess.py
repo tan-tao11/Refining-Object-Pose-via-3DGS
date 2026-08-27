@@ -138,7 +138,7 @@ def preprocess(data_path, save_path, text_prompt, sam_model='sam', interval=1, i
         image_folder_path = osp.join(seq_path, 'color')
         intr_folder_path = osp.join(seq_path, 'intrin_ba')
         pose_folder_path = osp.join(seq_path, 'poses_ba')
-
+        print(text_prompt)
         # Predict masks for images
         mask_folder_path = osp.join(seq_path, 'mask')
         if osp.exists(mask_folder_path):
@@ -221,6 +221,7 @@ if __name__ == '__main__':
     data_sequences = os.listdir(data_root)
     data_sequences.sort()
 
+    print(data_sequences)
     for seq in data_sequences:
         if not '-' in seq:
             continue
@@ -237,6 +238,7 @@ if __name__ == '__main__':
         for prompt in prompt_list:
             text_prompt += prompt + ' '
         # text_prompt = 'cookies box'
+        
         if data_type == "train":
             preprocess(data_path,  save_path, text_prompt, sam_model=sam_model, interval=interval)
         else:

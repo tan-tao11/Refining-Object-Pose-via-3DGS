@@ -1,5 +1,6 @@
 import os
 import glob
+import shutil
 import signal
 import sys
 import time
@@ -67,6 +68,56 @@ def _render_gs_features(splats, viewmat, K, W, H):
     )
 
     return render_features[0]  # (H, W, C)
+
+
+@torch.no_grad()
+def _render_gs_rgb(splats, viewmat, K, W, H):
+    """Render an RGB view of the GS model using gsplat's rasterization kernel.
+
+    Args:
+        splats: dict with keys means, quats, scales, opacities, and either
+            (sh0, shN) spherical-harmonics color coefficients or a plain
+            per-point `colors` tensor.
+        viewmat: (4, 4) world-to-camera matrix.
+        K: (3, 3) camera intrinsic matrix.
+        W, H: render resolution.
+
+    Returns:
+        (H, W, 3) rendered RGB image, values in [0, 1].
+    """
+    means = splats['means']
+    quats = splats['quats']
+    scales = torch.exp(splats['scales'])
+    opacities = torch.sigmoid(splats['opacities'])
+
+    kwargs = {}
+    if 'sh0' in splats and 'shN' in splats:
+        colors = torch.cat([splats['sh0'], splats['shN']], dim=1)  # (N, K, 3)
+        kwargs['sh_degree'] = 3
+    else:
+        colors = splats['colors']  # (N, 3)
+
+    render_colors, _, _ = rasterization(
+        means=means,
+        quats=quats,
+        scales=scales,
+        opacities=opacities,
+        colors=colors,
+        viewmats=viewmat[None],       # (1, 4, 4) world-to-camera
+        Ks=K[None],                   # (1, 3, 3)
+        width=W,
+        height=H,
+        packed=False,
+        absgrad=False,
+        sparse_grad=False,
+        rasterize_mode="classic",
+        distributed=False,
+        camera_model="pinhole",
+        radius_clip=3.0,
+        **kwargs,
+    )
+
+    return render_colors[0].clamp(0.0, 1.0)  # (H, W, 3)
 
 
 _MAX_CACHE = 8  # keep at most N GS models in GPU memory
@@ -468,19 +519,27 @@ def test_refine_model(config):
 #  Joint Testing  (Match → PnP → Refine)
 # ======================================================================
 
-def _resolve_gs_model(image_path, gs_base_dir):
-    """Derive the GS checkpoint path from the query image path.
+def _parse_obj_name(image_path):
+    """Derive the object name from a query image path.
 
     Directory convention:
         image : {data_root}/{split}_data/{obj_name}/{seq}/color/xxx.png
-        GS    : {gs_base_dir}/{obj_name}/ckpts/*.pt   (take the last one)
     """
     parts = image_path.replace("\\", "/").split("/")
     try:
         idx = next(i for i, p in enumerate(parts) if p.endswith("_data"))
-        obj_name = parts[idx + 1]
+        return parts[idx + 1]
     except StopIteration:
-        obj_name = parts[-4]
+        return parts[-4]
+
+
+def _resolve_gs_model(image_path, gs_base_dir):
+    """Derive the GS checkpoint path from the query image path.
+
+    Directory convention:
+        GS: {gs_base_dir}/{obj_name}/ckpts/*.pt   (take the last one)
+    """
+    obj_name = _parse_obj_name(image_path)
 
     gs_ckpts = sorted(glob.glob(osp.join(gs_base_dir, obj_name, "ckpts", "*.pt")))
     if not gs_ckpts:
@@ -517,6 +576,7 @@ def test_joint_model(config):
     from src.module.match.Matching_Model import Matching_Model
     from src.data.match.OnePose import OnePoseDataset
     from src.utils.metric_utils import ransac_PnP, query_pose_error, aggregate_metrics
+    from src.utils.plot_utils import draw_coarse_pose_matches
 
     match_model = Matching_Model(match_cfg.model)
     if match_cfg.model.ckpt is not None:
@@ -544,7 +604,7 @@ def test_joint_model(config):
         image_warp_adapt=False,
         match_type=match_cfg.dataset.match_type,
         split="val",
-        percent=0.2,
+        percent=1,
     )
     data_loader = torch.utils.data.DataLoader(
         dataset=dataset, batch_size=1, shuffle=False,
@@ -553,6 +613,10 @@ def test_joint_model(config):
     gs_base_dir = config.gs_base_dir
     img_resize = list(refine_cfg.dataset.img_resize)
     eval_cfg = match_cfg.train.eval_metrics
+    coarse_vis_dir = config.get("coarse_vis_dir", None)
+    if coarse_vis_dir:
+        shutil.rmtree(coarse_vis_dir, ignore_errors=True)
+        os.makedirs(coarse_vis_dir, exist_ok=True)
 
     renderer_cache = {}
     R_errs_match, t_errs_match = [], []
@@ -629,6 +693,27 @@ def test_joint_model(config):
                 torch.cuda.empty_cache()
             renderer_cache[gs_path] = _load_gs_splats(gs_path, device)
         splats = renderer_cache[gs_path]
+
+        # ---- Visualize coarse pose: render GS from pose_pred and draw
+        #      lines between observed 2D keypoints and their 3D matches
+        #      reprojected with pose_pred ----
+        if coarse_vis_dir:
+            H_vis, W_vis = data["query_image"].shape[-2:]
+            viewmat_vis = torch.from_numpy(pose_pred_homo.astype(np.float32)).to(device)
+            K_vis = data["query_intrinsic"][0].float().to(device)
+            render_rgb = _render_gs_rgb(splats, viewmat_vis, K_vis, int(W_vis), int(H_vis))
+            render_rgb = (render_rgb.cpu().numpy() * 255).astype(np.uint8)
+            query_img_vis = (data["query_image"][0, 0].cpu().numpy() * 255).astype(np.uint8)
+
+            obj_name = _parse_obj_name(image_path)
+            draw_coarse_pose_matches(
+                query_img_vis, render_rgb,
+                mkpts_query_f, mkpts_3d[mask],
+                pose_pred_homo, query_K[0],
+                R_err_m, t_err_m,
+                save_path=osp.join(coarse_vis_dir, obj_name, f"{batch_idx:04d}.png"),
+                inliers=inliers,
+            )
 
         # ---- Prepare refine input ----
         R_init = torch.from_numpy(pose_pred_homo[:3, :3].astype(np.float32)).to(device)

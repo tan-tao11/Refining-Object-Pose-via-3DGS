@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib.colors as mcolors
 import torch
 import numpy as np
 import random
@@ -456,3 +457,69 @@ def draw_reprojection_pair(
 
 def names_to_pair(name0, name1):
     return '_'.join((name0.replace('/', '-'), name1.replace('/', '-')))
+
+
+def draw_coarse_pose_matches(
+    query_image,
+    render_image,
+    mkpts_query,
+    mkpts_3d,
+    pose_pred,
+    K,
+    R_err,
+    t_err,
+    save_path,
+    inliers=None,
+    stage="Coarse",
+    color="lime",
+    lw=1.0,
+    ps=2,
+    max_matches=50,
+):
+    """Draw lines between observed 2D query keypoints and their matched 3D
+    points reprojected with `pose_pred`, next to a GS render taken from that
+    same pose. The figure title reports the pose error for `pose_pred`.
+
+    @param query_image: [H, W] or [H, W, 3] query image (as used for matching)
+    @param render_image: [H, W, 3] GS render taken from `pose_pred`
+    @param mkpts_query: [N, 2] observed 2D keypoints in `query_image`
+    @param mkpts_3d: [N, 3] their matched 3D points (object/world coords)
+    @param pose_pred: [3, 4] or [4, 4] predicted world-to-camera pose
+    @param K: [3, 3] intrinsics matching `query_image` / `render_image`
+    @param R_err: rotation error in degrees, shown in the title
+    @param t_err: translation error in cm, shown in the title
+    @param save_path: output image path; parent dirs are created if missing
+    @param inliers: optional index array to restrict to PnP inliers first
+    @param max_matches: subsample matches to at most this many lines
+    """
+    mkpts_query = np.asarray(mkpts_query)
+    mkpts_3d = np.asarray(mkpts_3d)
+
+    if inliers is not None and len(inliers) > 0:
+        inliers = np.asarray(inliers).reshape(-1)
+        mkpts_query = mkpts_query[inliers]
+        mkpts_3d = mkpts_3d[inliers]
+
+    if len(mkpts_query) > max_matches:
+        idx = np.linspace(0, len(mkpts_query) - 1, max_matches).astype(int)
+        mkpts_query = mkpts_query[idx]
+        mkpts_3d = mkpts_3d[idx]
+
+    mkpts_render, _ = reproj(K, pose_pred, mkpts_3d)
+
+    h, w = query_image.shape[:2]
+    mkpts_render[:, 0] = np.clip(mkpts_render[:, 0], 0, w - 1)
+    mkpts_render[:, 1] = np.clip(mkpts_render[:, 1], 0, h - 1)
+
+    plot_image_pair([query_image, render_image], horizontal=True)
+    colors = np.tile(np.array(mcolors.to_rgba(color)), (len(mkpts_query), 1))
+    plot_matches(mkpts_query, mkpts_render, colors, lw=lw, ps=ps)
+
+    fig = plt.gcf()
+    fig.suptitle(f"{stage} error {R_err:.2f} deg, {t_err:.2f} cm", fontsize=14)
+    fig.subplots_adjust(top=0.90)
+
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(str(save_path), dpi=150, bbox_inches="tight")
+    plt.close(fig)
